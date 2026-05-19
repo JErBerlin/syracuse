@@ -57,16 +57,18 @@ func main() {
 			return
 		}
 
-		results := make([]sequence, 0, len(in.Nums))
+		results := make(chan sequence, len(in.Nums))
 
 		for _, n := range in.Nums {
-			seq := syr(n)
-			results = append(results, seq)
+			go func(n num) {
+				seq := syr(n)
+				results <- seq
+			}(n)
 		}
 
-		// small redundance, will make sense when concurrency implemented
 		var sequences []sequence
-		for _, res := range results {
+		for range in.Nums {
+			res := <-results
 			sequences = append(sequences, res)
 		}
 
