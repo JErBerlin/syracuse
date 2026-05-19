@@ -1,9 +1,11 @@
 package main
 
 import (
+	"context"
 	"encoding/json"
 	"log"
 	"net/http"
+	"time"
 )
 
 type num int
@@ -84,6 +86,11 @@ func main() {
 	})
 
 	mux.HandleFunc("POST /syr/batch/winner", func(w http.ResponseWriter, r *http.Request) {
+		// Set a timeout on the query and prepare context for cancellation
+		timeout := 1 * time.Second
+		ctx, cancel := context.WithTimeout(r.Context(), timeout)
+		defer cancel()
+
 		var in reqBatch
 		if err := json.NewDecoder(r.Body).Decode(&in); err != nil {
 			http.Error(w, "invalid JSON", http.StatusBadRequest)
@@ -98,14 +105,29 @@ func main() {
 
 		for _, n := range in.Nums {
 			go func(n num) {
-				seq := syr(n)
-				results <- seq
+				seq, ok := syrContextAware(ctx, n)
+				if !ok {
+					return
+				}
+
+				select {
+				case results <- seq:
+				case <-ctx.Done():
+					return
+				}
 			}(n)
 		}
 
-		// will block until first result comes
-		// we will ignore for now the possibly still running go routines
-		res := <-results
+		var res sequence
+
+		// will block until first result comes or context is cancelled
+		select {
+		case res = <-results:
+			cancel()
+		case <-ctx.Done():
+			http.Error(w, "error computing the sequences: no results", http.StatusInternalServerError)
+			return
+		}
 
 		out := &resp{
 			Sequence: res,
@@ -135,4 +157,29 @@ func syr(n num) []num {
 		n = 3*n + 1
 	}
 	return iter
+}
+
+// syr is now context aware, returning even before finishing the iterations when context is cancelled
+// it returns true when it finished the iterations
+func syrContextAware(ctx context.Context, n num) (sequence, bool) {
+	iter := sequence{}
+
+	for n != 1 {
+		select {
+		case <-ctx.Done():
+			return nil, false
+		default:
+		}
+
+		iter = append(iter, n)
+
+		if n%2 == 0 {
+			n = n / 2
+			continue
+		}
+
+		n = 3*n + 1
+	}
+
+	return iter, true
 }
