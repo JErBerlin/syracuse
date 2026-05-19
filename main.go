@@ -83,6 +83,41 @@ func main() {
 		}
 	})
 
+	mux.HandleFunc("POST /syr/batch/winner", func(w http.ResponseWriter, r *http.Request) {
+		var in reqBatch
+		if err := json.NewDecoder(r.Body).Decode(&in); err != nil {
+			http.Error(w, "invalid JSON", http.StatusBadRequest)
+			return
+		}
+		if len(in.Nums) < 1 {
+			http.Error(w, "invalid request, cannot be empty", http.StatusBadRequest)
+			return
+		}
+
+		results := make(chan sequence, len(in.Nums))
+
+		for _, n := range in.Nums {
+			go func(n num) {
+				seq := syr(n)
+				results <- seq
+			}(n)
+		}
+
+		// will block until first result comes
+		// we will ignore for now the possibly still running go routines
+		res := <-results
+
+		out := &resp{
+			Sequence: res,
+		}
+
+		w.Header().Set("Content-Type", "application/json")
+
+		if err := json.NewEncoder(w).Encode(out); err != nil {
+			log.Printf("write response: %v", err)
+		}
+	})
+
 	log.Println("started and listening on :8080")
 	if err := http.ListenAndServe(":8080", mux); err != nil {
 		log.Fatal(err)
