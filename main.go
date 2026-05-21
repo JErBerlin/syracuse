@@ -63,15 +63,31 @@ func main() {
 
 		for _, n := range in.Nums {
 			go func(n num) {
-				seq := syr(n)
-				results <- seq
+				seq, ok := syrContextAware(ctx, n)
+				if !ok {
+					return
+				}
+
+				select {
+				case results <- seq:
+				case <-ctx.Done():
+					return
+				}
 			}(n)
 		}
 
-		var sequences []sequence
+		var res sequence
+		sequences := make([]sequence, 0, len(in.Nums))
+
+		// will block until first result comes or context is cancelled
 		for range in.Nums {
-			res := <-results
-			sequences = append(sequences, res)
+			select {
+			case res = <-results:
+				sequences = append(sequences, res)
+			case <-ctx.Done():
+				http.Error(w, "computing the sequences: timeout", http.StatusInternalServerError)
+				return
+			}
 		}
 
 		out := &respBatch{
