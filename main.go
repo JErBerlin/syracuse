@@ -66,7 +66,7 @@ func main() {
 
 	mux.HandleFunc("POST /syr/batch", func(w http.ResponseWriter, r *http.Request) {
 		// Set a timeout on the query and prepare context for cancellation
-		timeout := 5 * time.Second
+		timeout := 10 * time.Second
 		ctx, cancel := context.WithTimeout(r.Context(), timeout)
 		defer cancel()
 
@@ -135,7 +135,7 @@ func main() {
 
 				sequences = append(sequences, res)
 			case <-ctx.Done():
-				http.Error(w, "computing the sequences: timeout", http.StatusInternalServerError)
+				http.Error(w, "computing the sequences: timeout", http.StatusServiceUnavailable)
 				return
 			}
 		}
