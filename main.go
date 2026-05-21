@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"log"
 	"net/http"
+	"sync"
 	"time"
 )
 
@@ -28,7 +29,16 @@ type respBatch struct {
 	Sequences []sequence
 }
 
+type cache struct {
+	store map[num]sequence
+	mu    sync.Mutex
+}
+
 func main() {
+	c := cache{
+		store: make(map[num]sequence),
+	}
+
 	mux := http.NewServeMux()
 	mux.HandleFunc("POST /syr", func(w http.ResponseWriter, r *http.Request) {
 		var in req
@@ -73,16 +83,30 @@ func main() {
 
 		for _, n := range in.Nums {
 			go func(n num) {
-				seq, ok := syrContextAware(ctx, n)
-				if !ok {
-					return
+				// check if sequence for starting num is already cached
+				var seq sequence
+				c.mu.Lock()
+				seq, hit := c.store[n]
+				c.mu.Unlock()
+
+				// if cache not hit, make the calculation
+				if !hit {
+					slog.Info("cache miss", "num", n)
+					var ok bool
+					seq, ok = syrContextAware(ctx, n)
+					// not ok means early return because cancellation
+					if !ok {
+						return
+					}
+				} else {
+					slog.Info("cache hit", "num", n)
 				}
 
 				select {
 				case results <- seq:
 				case <-ctx.Done():
-					return
 				}
+				return
 			}(n)
 		}
 
@@ -93,6 +117,21 @@ func main() {
 		for range in.Nums {
 			select {
 			case res = <-results:
+				// save the sequence in the result to the cache if not already there
+				var n num
+				if len(res) >= 1 {
+					n = res[0]
+				} else {
+					http.Error(w, "computing the sequences: empty result sequence", http.StatusInternalServerError)
+					return
+				}
+
+				c.mu.Lock()
+				if _, ok := c.store[n]; !ok {
+					c.store[n] = res
+				}
+				c.mu.Unlock()
+
 				sequences = append(sequences, res)
 			case <-ctx.Done():
 				http.Error(w, "computing the sequences: timeout", http.StatusInternalServerError)
