@@ -4,6 +4,7 @@ import (
 	"context"
 	"encoding/json"
 	"log"
+	"log/slog"
 	"net/http"
 	"sync"
 	"time"
@@ -146,7 +147,7 @@ func main() {
 		w.Header().Set("Content-Type", "application/json")
 
 		if err := json.NewEncoder(w).Encode(out); err != nil {
-			log.Printf("write response: %v", err)
+			slog.Error("write response", "err", err)
 		}
 	})
 
@@ -227,11 +228,13 @@ func syr(n num) []num {
 // syr is now context aware, returning even before finishing the iterations when context is cancelled
 // it returns true when it finished the iterations
 func syrContextAware(ctx context.Context, n num) (sequence, bool) {
+	start := n
 	iter := sequence{}
 
 	for n != 1 {
 		select {
 		case <-ctx.Done():
+			slog.Info("calculation cancelled", "start", start, "current", n, "err", ctx.Err())
 			return nil, false
 		default:
 		}
