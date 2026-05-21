@@ -49,6 +49,11 @@ func main() {
 	})
 
 	mux.HandleFunc("POST /syr/batch", func(w http.ResponseWriter, r *http.Request) {
+		// Set a timeout on the query and prepare context for cancellation
+		timeout := 5 * time.Second
+		ctx, cancel := context.WithTimeout(r.Context(), timeout)
+		defer cancel()
+
 		var in reqBatch
 		if err := json.NewDecoder(r.Body).Decode(&in); err != nil {
 			http.Error(w, "invalid JSON", http.StatusBadRequest)
