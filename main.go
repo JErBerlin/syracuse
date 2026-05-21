@@ -10,7 +10,7 @@ import (
 	"time"
 )
 
-type num int
+type num uint64
 
 type req struct {
 	Num num
