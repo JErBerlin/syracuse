@@ -37,6 +37,11 @@ func main() {
 			return
 		}
 
+		if !validateRequest(in.Num) {
+			http.Error(w, "invalid request: cannot be empty and the starting numbers must be >= 2", http.StatusBadRequest)
+			return
+		}
+
 		out := &resp{
 			Sequence: syr(in.Num),
 		}
@@ -59,8 +64,8 @@ func main() {
 			http.Error(w, "invalid JSON", http.StatusBadRequest)
 			return
 		}
-		if len(in.Nums) < 1 {
-			http.Error(w, "invalid request, cannot be empty", http.StatusBadRequest)
+		if len(in.Nums) < 1 || !validateBatchRequest(in.Nums) {
+			http.Error(w, "invalid request: cannot be empty and the starting numbers must be >= 2", http.StatusBadRequest)
 			return
 		}
 
@@ -117,8 +122,8 @@ func main() {
 			http.Error(w, "invalid JSON", http.StatusBadRequest)
 			return
 		}
-		if len(in.Nums) < 1 {
-			http.Error(w, "invalid request, cannot be empty", http.StatusBadRequest)
+		if len(in.Nums) < 1 || !validateBatchRequest(in.Nums) {
+			http.Error(w, "invalid request: cannot be empty and the starting numbers must be >= 2", http.StatusBadRequest)
 			return
 		}
 
@@ -203,4 +208,20 @@ func syrContextAware(ctx context.Context, n num) (sequence, bool) {
 	}
 
 	return iter, true
+}
+
+func validateRequest(n num) bool {
+	if n < 2 {
+		return false
+	}
+	return true
+}
+
+func validateBatchRequest(seq []num) bool {
+	for _, n := range seq {
+		if n < 2 {
+			return false
+		}
+	}
+	return true
 }
